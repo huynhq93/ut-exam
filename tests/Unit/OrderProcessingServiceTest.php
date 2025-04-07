@@ -116,7 +116,6 @@ test('processOrders handles type A orders with CSV export failure', function () 
         ->with(1, 'export_failed', 'low')
         ->andReturn(true);
 
-    // Mock FileSystemInterface để simulate fopen failure
     $this->fileSystem->shouldReceive('fopen')
         ->once()
         ->andReturn(false);
@@ -131,6 +130,24 @@ test('processOrders handles type A orders with CSV export failure', function () 
 });
 
 // 4. Trường hợp loại đơn hàng B
+test('processOrders handles type B orders with API error', function () {
+    $order = new Order(1, 'B', 80, false);
+    $this->dbService->shouldReceive('getOrdersByUser')
+        ->with(1)
+        ->andReturn([$order]);
+    $this->apiClient->shouldReceive('callAPI')
+        ->with(1)
+        ->andThrow(new APIException('API Error'));
+    $this->dbService->shouldReceive('updateOrderStatus')
+        ->with(1, 'api_failure', 'low')
+        ->andReturn(true);
+
+    $result = $this->service->processOrders(1);
+
+    expect($result)->toBeArray()
+        ->and($result[0]->status)->toBe('api_failure');
+});
+
 test('processOrders handles type B orders with successful API response', function () {
     $order = new Order(1, 'B', 80, false);
 
@@ -148,6 +165,64 @@ test('processOrders handles type B orders with successful API response', functio
 
     expect($result)->toBeArray()
         ->and($result[0]->status)->toBe('processed');
+});
+
+test('processOrders handles type B orders with pending status', function () {
+    $order = new Order(1, 'B', 80, true);
+    $responseOrder = new Order(1, 'B', 80, true);
+    $responseOrder->status = 'success';
+    $responseOrder->data = 40;
+
+    $this->dbService->shouldReceive('getOrdersByUser')
+        ->with(1)
+        ->andReturn([$order]);
+    $this->apiClient->shouldReceive('callAPI')
+        ->with(1)
+        ->andReturn(new APIResponse('success', 40));
+    $this->dbService->shouldReceive('updateOrderStatus')
+        ->with(1, 'pending', 'low')
+        ->andReturn(true);
+
+    $result = $this->service->processOrders(1);
+
+    expect($result)->toBeArray()
+        ->and($result[0]->status)->toBe('pending');
+});
+
+test('processOrders handles type B orders with successful API response and error status', function () {
+    $order = new Order(1, 'B', 200, false);
+    $this->dbService->shouldReceive('getOrdersByUser')
+        ->with(1)
+        ->andReturn([$order]);
+    $this->apiClient->shouldReceive('callAPI')
+        ->with(1)
+        ->andReturn(new APIResponse('success', 60));
+    $this->dbService->shouldReceive('updateOrderStatus')
+        ->with(1, 'error', 'low')
+        ->andReturn(true);
+
+    $result = $this->service->processOrders(1);
+
+    expect($result)->toBeArray()
+        ->and($result[0]->status)->toBe('error');
+});
+
+test('processOrders handles type B orders with successful API response but status of API response is error', function () {
+    $order = new Order(1, 'B', 200, false);
+    $this->dbService->shouldReceive('getOrdersByUser')
+        ->with(1)
+        ->andReturn([$order]);
+    $this->apiClient->shouldReceive('callAPI')
+        ->with(1)
+        ->andReturn(new APIResponse('api_error', 60));
+    $this->dbService->shouldReceive('updateOrderStatus')
+        ->with(1, 'api_error', 'low')
+        ->andReturn(true);
+
+    $result = $this->service->processOrders(1);
+
+    expect($result)->toBeArray()
+        ->and($result[0]->status)->toBe('api_error');
 });
 
 test('processOrders handles type B orders with high value', function () {
@@ -186,64 +261,6 @@ test('processOrders handles type B orders with low value', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]->priority)->toBe('low');
-});
-
-test('processOrders handles type B orders with pending status', function () {
-    $order = new Order(1, 'B', 80, true);
-    $responseOrder = new Order(1, 'B', 80, true);
-    $responseOrder->status = 'success';
-    $responseOrder->data = 40;
-
-    $this->dbService->shouldReceive('getOrdersByUser')
-        ->with(1)
-        ->andReturn([$order]);
-    $this->apiClient->shouldReceive('callAPI')
-        ->with(1)
-        ->andReturn(new APIResponse('success', 40));
-    $this->dbService->shouldReceive('updateOrderStatus')
-        ->with(1, 'pending', 'low')
-        ->andReturn(true);
-
-    $result = $this->service->processOrders(1);
-
-    expect($result)->toBeArray()
-        ->and($result[0]->status)->toBe('pending');
-});
-
-test('processOrders handles type B orders with API error', function () {
-    $order = new Order(1, 'B', 80, false);
-    $this->dbService->shouldReceive('getOrdersByUser')
-        ->with(1)
-        ->andReturn([$order]);
-    $this->apiClient->shouldReceive('callAPI')
-        ->with(1)
-        ->andThrow(new APIException('API Error'));
-    $this->dbService->shouldReceive('updateOrderStatus')
-        ->with(1, 'api_failure', 'low')
-        ->andReturn(true);
-
-    $result = $this->service->processOrders(1);
-
-    expect($result)->toBeArray()
-        ->and($result[0]->status)->toBe('api_failure');
-});
-
-test('processOrders handles type B orders with API success but return status error', function () {
-    $order = new Order(1, 'B', 200, false);
-    $this->dbService->shouldReceive('getOrdersByUser')
-        ->with(1)
-        ->andReturn([$order]);
-    $this->apiClient->shouldReceive('callAPI')
-        ->with(1)
-        ->andReturn(new APIResponse('success', 60));
-    $this->dbService->shouldReceive('updateOrderStatus')
-        ->with(1, 'error', 'low')
-        ->andReturn(true);
-
-    $result = $this->service->processOrders(1);
-
-    expect($result)->toBeArray()
-        ->and($result[0]->status)->toBe('error');
 });
 
 // 5. Trường hợp loại đơn hàng C
