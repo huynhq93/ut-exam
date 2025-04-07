@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    working_dir: /var/www/html
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    working_dir: /var/www/html
+    command: composer test 
